@@ -98,6 +98,14 @@ public:
 	void AddBody(Stmt* new_body, id_list* new_inits, int new_frame_size,
 			int priority) override;
 
+	// Makes a deep copy of the input frame and assigns it to this function's
+	// closure.
+	void SetClosure(Frame* f)
+		// Frames can be null:
+		{ this->closure = f ? f->Clone() : f; }
+	void SetArgumentIDs(std::shared_ptr<id_list> args)
+		{ argument_ids = std::move(args); }
+
 	int FrameSize() const {	return frame_size; }
 
 	void Describe(ODesc* d) const override;
@@ -109,6 +117,14 @@ protected:
 	DECLARE_SERIAL(BroFunc);
 
 	int frame_size;
+
+private:
+	// IDs of the function arguments. Used to set offsets when the function has
+	// a closure. This pointer is shared with LambdaExpr.
+	std::shared_ptr<id_list> argument_ids;
+	// The frame the Func was initialized in. This is not guaranteed to be
+	// initialized and should be handled with care.
+	Frame* closure = nullptr;
 };
 
 typedef Val* (*built_in_func)(Frame* frame, val_list* args);

@@ -17,7 +17,7 @@ public:
 	Frame(int size, const BroFunc* func, const val_list *fn_args);
 	~Frame() override;
 
-	Val* NthElement(int n)		{ return frame[n]; }
+	Val* NthElement(int n) { return frame[n]; }
 	void SetElement(int n, Val* v)
 		{
 		Unref(frame[n]);
@@ -63,6 +63,8 @@ public:
 
 	void SetDelayed()	{ delayed = true; }
 	bool HasDelayed() const	{ return delayed; }
+
+	int n_elements() { return this->size; }
 
 protected:
 	void Clear();

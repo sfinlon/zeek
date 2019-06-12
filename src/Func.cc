@@ -369,6 +369,8 @@ BroFunc::~BroFunc()
 	{
 	for ( unsigned int i = 0; i < bodies.size(); ++i )
 		Unref(bodies[i].stmts);
+
+	delete this->closure;
 	}
 
 int BroFunc::IsPure() const
@@ -411,7 +413,12 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 		return Flavor() == FUNC_FLAVOR_HOOK ? val_mgr->GetTrue() : 0;
 		}
 
-	Frame* f = new Frame(frame_size, this, args);
+	int closure_size = 0;
+	if ( this->closure )
+		closure_size = this->closure->n_elements();
+
+	// f will hold the closure & functions values
+	Frame* f = new Frame(closure_size + frame_size, this, args);
 
 	// Hand down any trigger.
 	if ( parent )
@@ -436,6 +443,35 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 	stmt_flow_type flow = FLOW_NEXT;
 	Val* result = 0;
 
+	// Add the closure's elements to the beginning of the frame.
+	int ofst = 0;
+	while (ofst <  closure_size)
+		{
+		Val* element = closure->NthElement(ofst);
+		if (element)
+			{
+			// Don't override it if its already there.
+			if (f->NthElement(ofst) != element)
+				{
+				Ref(element);
+				f->SetElement(ofst, element);
+				}
+			}
+		++ofst;
+		}
+
+	// Offset the argument_ids as appropriate
+	// TODO: where is the earliest place we know the closure size?
+	if (this->closure)
+		{
+		id_list* idl = argument_ids.get();
+		loop_over_list(*idl, i)
+			{
+			ID* id = (*idl)[i];
+			id->SetOffset(id->Offset() + closure_size);
+			}
+		}
+
 	for ( size_t i = 0; i < bodies.size(); ++i )
 		{
 		if ( sample_logger )
@@ -444,20 +480,21 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 
 		Unref(result);
 
+		// reporter->Warning("Adding function arguments.");
+		// Fill in the rest of the frame with the function's arguments.
 		loop_over_list(*args, j)
 			{
 			Val* arg = (*args)[j];
 
-			if ( f->NthElement(j) != arg )
+			if ( f->NthElement(ofst + j) != arg )
 				{
-				// Either not yet set, or somebody reassigned
-				// the frame slot.
+				// Either not yet set, or somebody reassigned the frame slot.
 				Ref(arg);
-				f->SetElement(j, arg);
+				f->SetElement(ofst + j, arg);
 				}
 			}
 
-		f->Reset(args->length());
+		f->Reset(args->length() + closure_size);
 
 		try
 			{
@@ -468,7 +505,7 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 			{
 			// Already reported, but now determine whether to unwind further.
 			if ( Flavor() == FUNC_FLAVOR_FUNCTION )
-				throw;
+				throw; // TODO: delete / unref f here?
 
 			// Continue exec'ing remaining bodies of hooks/events.
 			continue;
@@ -498,6 +535,20 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 			}
 		}
 
+	// Reset the argument_ids' offsets as appropriate
+	if (this->closure)
+		{
+		id_list* idl = argument_ids.get();
+		loop_over_list(*idl, i)
+			{
+			ID* id = (*idl)[i];
+			if (id)
+				{
+				id->SetOffset(id->Offset() - closure_size);
+				}
+			}
+		}
+
 	call_stack.pop_back();
 
 	// We have an extra Ref for each argument (so that they don't get
@@ -517,7 +568,7 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 		 (flow != FLOW_RETURN /* we fell off the end */ ||
 		  ! result /* explicit return with no result */) &&
 		 ! f->HasDelayed() )
-		reporter->Warning("non-void function returns without a value: %s",
+		reporter->Warning("non-void function returning without a value: %s",
 				  Name());
 
 	if ( result && g_trace_state.DoTrace() )
@@ -578,7 +629,8 @@ Stmt* BroFunc::AddInits(Stmt* body, id_list* inits)
 		return body;
 
 	StmtList* stmt_series = new StmtList;
-	stmt_series->Stmts().append(new InitStmt(inits));
+	InitStmt* first = new InitStmt(inits);
+	stmt_series->Stmts().append(first);
 	stmt_series->Stmts().append(body);
 
 	return stmt_series;

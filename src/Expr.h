@@ -13,6 +13,8 @@
 #include "EventHandler.h"
 #include "TraverseTypes.h"
 
+#include <utility> // std::move
+
 typedef enum {
 	EXPR_ANY = -1,
 	EXPR_NAME, EXPR_CONST,
@@ -997,7 +999,7 @@ public:
 
 protected:
 	friend class Expr;
-	CallExpr()	{ func = 0; args = 0; }
+	CallExpr() { func = 0; args = 0; }
 
 	void ExprDescribe(ODesc* d) const override;
 
@@ -1005,6 +1007,30 @@ protected:
 
 	Expr* func;
 	ListExpr* args;
+};
+
+/*
+	Class to handle the creation of anonymous functions with closures.
+	- Takes an instantiaed BroFunc and a list of its argument ids in its
+		constructor.
+	- On evaluation, makes a deep copy of the frame that it is called in, gives
+		that to its BroFunc, and returns the BroFunc. This frame is the function's
+		closure.
+*/
+class LambdaExpr : public Expr {
+public:
+	LambdaExpr(Val* func_in, std::shared_ptr<id_list> arguments);
+	~LambdaExpr();
+
+	Val* Eval(Frame* f) const override;
+	TraversalCode Traverse(TraversalCallback* cb) const override;
+
+protected:
+	void ExprDescribe(ODesc* d) const override;
+
+private:
+	Val* func;
+	std::shared_ptr<id_list> argument_ids;
 };
 
 class EventExpr : public Expr {

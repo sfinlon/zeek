@@ -272,7 +272,7 @@ bro:
 			else
 				stmts = $2;
 
-			// Any objects creates from hereon out should not
+			// Any objects creates from here on out should not
 			// have file positions associated with them.
 			set_location(no_location);
 			}
@@ -1218,16 +1218,53 @@ func_body:
 	;
 
 anonymous_function:
-		TOK_FUNCTION begin_func func_body
-			{ $$ = new ConstExpr($2->ID_Val()); }
+		TOK_FUNCTION func_params
+		/* TOK_FUNCTION begin_func func_body
+			{ $$ = new ConstExpr($2->ID_Val()); } */
+			{
+			$<id>$ = current_scope()->GenerateTemporary("anonymous-function");
+			begin_func($<id>$, current_module.c_str(), FUNC_FLAVOR_FUNCTION, 0, $2);
+			}
+
+		'{'
+			{
+			saved_in_init.push_back(in_init);
+			in_init = 0;
+			}
+
+		stmt_list
+			{
+			in_init = saved_in_init.back();
+			saved_in_init.pop_back();
+			}
+
+		'}'
+			{
+			// Here we don't know the size of the functions closure because there
+			// could be more variable assignments below the function. We capture the
+			// IDs of the functions arguments here and store them for later so that
+			// we can apply an appropriate offset to them once we know more about
+			// the closure.
+			std::shared_ptr<id_list> argument_ids(new id_list);
+			RecordType* args = $2->Args();
+			for ( int i = 0; i < args->NumFields(); ++i )
+				{
+				TypeDecl* arg_i = args->FieldDecl(i);
+				ID* arg_id = lookup_ID(arg_i->id, current_module.c_str());
+				argument_ids->append(arg_id);
+				}
+
+			end_func($6);
+
+			$$ = new LambdaExpr(($<id>3)->ID_Val(), std::move(argument_ids));
+			}
 	;
 
 begin_func:
 		func_params
 			{
 			$$ = current_scope()->GenerateTemporary("anonymous-function");
-			begin_func($$, current_module.c_str(),
-				   FUNC_FLAVOR_FUNCTION, 0, $1);
+			begin_func($$, current_module.c_str(), FUNC_FLAVOR_FUNCTION, 0, $1);
 			}
 	;
 

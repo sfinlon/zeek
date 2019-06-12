@@ -4991,6 +4991,47 @@ bool CallExpr::DoUnserialize(UnserialInfo* info)
 	return args != 0;
 	}
 
+LambdaExpr::LambdaExpr(Val* func_in, std::shared_ptr<id_list> arguments)
+	{
+	if (func_in->Type()->Tag() != TYPE_FUNC)
+		{
+		reporter->InternalError
+			("Instantiated a lambda expression from a non-function type.");
+		}
+	this->argument_ids = std::move(arguments);
+	this->func = func_in;
+	SetType(func_in->Type()->Ref());
+	}
+
+LambdaExpr::~LambdaExpr()
+	{
+	Unref(this->func);
+	}
+
+Val* LambdaExpr::Eval(Frame* f) const
+	{
+	BroFunc* lamb = this->func->AsBroFunc();
+	lamb->SetClosure(f);
+	lamb->SetArgumentIDs(this->argument_ids);
+	// TODO: need to ref the Val?
+	return new Val(lamb);
+	}
+
+void LambdaExpr::ExprDescribe(ODesc* d) const
+	{
+	this->func->Describe(d);
+	}
+
+// Borrows from ConstExpr.
+TraversalCode LambdaExpr::Traverse(TraversalCallback* cb) const
+	{
+	TraversalCode tc = cb->PreExpr(this);
+	HANDLE_TC_EXPR_PRE(tc);
+
+	tc = cb->PostExpr(this);
+	HANDLE_TC_EXPR_POST(tc);
+	}
+
 EventExpr::EventExpr(const char* arg_name, ListExpr* arg_args)
 : Expr(EXPR_EVENT)
 	{

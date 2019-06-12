@@ -385,6 +385,7 @@ void begin_func(ID* id, const char* module_name, function_flavor flavor,
 
 	RecordType* args = t->Args();
 	int num_args = args->NumFields();
+
 	for ( int i = 0; i < num_args; ++i )
 		{
 		TypeDecl* arg_i = args->FieldDecl(i);
@@ -474,15 +475,15 @@ void end_func(Stmt* body)
 			}
 		}
 
-	if ( streq(id->Name(), "anonymous-function") )
-		{
-		OuterIDBindingFinder cb(scope);
-		body->Traverse(&cb);
-
-		for ( size_t i = 0; i < cb.outer_id_references.size(); ++i )
-			cb.outer_id_references[i]->Error(
-						"referencing outer function IDs not supported");
-		}
+	// if ( streq(id->Name(), "anonymous-function") )
+	// 	{
+	// 	OuterIDBindingFinder cb(scope);
+	// 	body->Traverse(&cb);
+	//
+	// 	for ( size_t i = 0; i < cb.outer_id_references.size(); ++i )
+	// 		cb.outer_id_references[i]->Error(
+	// 					"referencing outer function IDs not supported");
+	// 	}
 
 	if ( id->HasVal() )
 		id->ID_Val()->AsFunc()->AddBody(body, inits, frame_size, priority);

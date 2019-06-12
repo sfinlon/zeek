@@ -7,6 +7,8 @@
 #include "Func.h"
 #include "Trigger.h"
 
+#include <string>
+
 vector<Frame*> g_frame_stack;
 
 Frame::Frame(int arg_size, const BroFunc* func, const val_list* fn_args)
