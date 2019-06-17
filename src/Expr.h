@@ -12,7 +12,9 @@
 #include "Debug.h"
 #include "EventHandler.h"
 #include "TraverseTypes.h"
+#include "Func.h" // function_ingredients
 
+#include <memory> // std::shared_ptr
 #include <utility> // std::move
 
 typedef enum {
@@ -63,6 +65,8 @@ class NameExpr;
 class AssignExpr;
 class CallExpr;
 class EventExpr;
+
+struct function_ingredients;
 
 
 class Expr : public BroObj {
@@ -1011,16 +1015,16 @@ protected:
 
 /*
 	Class to handle the creation of anonymous functions with closures.
-	- Takes an instantiaed BroFunc and a list of its argument ids in its
-		constructor.
-	- On evaluation, makes a deep copy of the frame that it is called in, gives
-		that to its BroFunc, and returns the BroFunc. This frame is the function's
-		closure.
+	- Takes all of the ingredients needed to make a BroFunc and the argument IDs
+		that the BroFunc with those ingredients needs.
+	- When evaluated, creates a new BroFunc with those ingredients and gives that
+		BroFunc a copy of the frame that it is being evalued in. This frame serves
+		as the closure for the new BroFunc.
 */
 class LambdaExpr : public Expr {
 public:
-	LambdaExpr(Val* func_in, std::shared_ptr<id_list> arguments);
-	~LambdaExpr();
+	LambdaExpr(std::unique_ptr<function_ingredients> ingredients,
+							std::shared_ptr<id_list> arguments);
 
 	Val* Eval(Frame* f) const override;
 	TraversalCode Traverse(TraversalCallback* cb) const override;
@@ -1029,7 +1033,7 @@ protected:
 	void ExprDescribe(ODesc* d) const override;
 
 private:
-	Val* func;
+	std::unique_ptr<function_ingredients> ingredients;
 	std::shared_ptr<id_list> argument_ids;
 };
 

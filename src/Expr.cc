@@ -4991,35 +4991,39 @@ bool CallExpr::DoUnserialize(UnserialInfo* info)
 	return args != 0;
 	}
 
-LambdaExpr::LambdaExpr(Val* func_in, std::shared_ptr<id_list> arguments)
+LambdaExpr::LambdaExpr(std::unique_ptr<function_ingredients> ingredients,
+												std::shared_ptr<id_list> arguments)
 	{
-	if (func_in->Type()->Tag() != TYPE_FUNC)
-		{
-		reporter->InternalError
-			("Instantiated a lambda expression from a non-function type.");
-		}
+	this->ingredients = std::move(ingredients);
 	this->argument_ids = std::move(arguments);
-	this->func = func_in;
-	SetType(func_in->Type()->Ref());
-	}
-
-LambdaExpr::~LambdaExpr()
-	{
-	Unref(this->func);
+	SetType(this->ingredients->id->Type()->Ref());
 	}
 
 Val* LambdaExpr::Eval(Frame* f) const
 	{
-	BroFunc* lamb = this->func->AsBroFunc();
+	if (f)
+		reporter->Warning("eval being called in LambdaExpr");
+	// TODO: dangerous to just pass pointers into here? Look into cloning.
+	BroFunc* lamb = new BroFunc(
+															ingredients->id,
+															ingredients->body,
+															ingredients->inits,
+															ingredients->frame_size,
+															ingredients->priority
+														);
+	// TODO: Ref in here?
+	// This relies on an assumption that we can safely set offsets once for all
+	// of the argument IDs -> all the baby BroFuncs will have the same closure
+	// size. I'm not sure this actually the case.
+	lamb->SetArgumentIDs(argument_ids);
 	lamb->SetClosure(f);
-	lamb->SetArgumentIDs(this->argument_ids);
-	// TODO: need to ref the Val?
-	return new Val(lamb);
+	lamb->UpdateOffsets();
+	return (new Val(lamb))->Ref();
 	}
 
 void LambdaExpr::ExprDescribe(ODesc* d) const
 	{
-	this->func->Describe(d);
+	return; // TODO
 	}
 
 // Borrows from ConstExpr.

@@ -4,10 +4,13 @@
 #define func_h
 
 #include <utility>
+#include <memory> // std::shared_ptr, std::unique_ptr
 
 #include "BroList.h"
 #include "Obj.h"
 #include "Debug.h"
+#include "Frame.h"
+// #include "Val.h"
 
 class Val;
 class ListExpr;
@@ -16,6 +19,8 @@ class Stmt;
 class Frame;
 class ID;
 class CallExpr;
+
+struct CloneState;
 
 class Func : public BroObj {
 public:
@@ -62,6 +67,7 @@ public:
 	// This (un-)serializes only a single body (as given in SerialInfo).
 	bool Serialize(SerialInfo* info) const;
 	static Func* Unserialize(UnserialInfo* info);
+	virtual Val* DoClone();
 
 	virtual TraversalCode Traverse(TraversalCallback* cb) const;
 
@@ -102,9 +108,20 @@ public:
 	// closure.
 	void SetClosure(Frame* f)
 		// Frames can be null:
+		// TODO: use OuterIDBindingFinder to only clone exactly what we need.
 		{ this->closure = f ? f->Clone() : f; }
 	void SetArgumentIDs(std::shared_ptr<id_list> args)
-		{ argument_ids = std::move(args); }
+		{
+		argument_ids = std::move(args);
+		// id_list* a = args.get();
+		// loop_over_list(*a, i)
+		// 	{
+		// 	Ref((*a)[i]);
+		// 	}
+		}
+	void UpdateOffsets();
+
+	Val* DoClone() override;
 
 	int FrameSize() const {	return frame_size; }
 
@@ -125,6 +142,7 @@ private:
 	// The frame the Func was initialized in. This is not guaranteed to be
 	// initialized and should be handled with care.
 	Frame* closure = nullptr;
+	//
 };
 
 typedef Val* (*built_in_func)(Frame* frame, val_list* args);
@@ -161,6 +179,17 @@ struct CallInfo {
 	const Func* func;
 	const val_list* args;
 };
+
+// Struct that collects the arguments for a Func.
+// Used for BroFuncs with closures.
+struct function_ingredients
+	{
+		ID* id;
+		Stmt* body;
+		id_list* inits;
+		int frame_size;
+		int priority;
+	};
 
 extern vector<CallInfo> call_stack;
 

@@ -77,7 +77,6 @@ typedef union {
 
 	BroString* string_val;
 	Func* func_val;
-	BroFunc* bro_func_val;
 	BroFile* file_val;
 	RE_Matcher* re_val;
 	PDict(TableEntryVal)* table_val;
@@ -231,7 +230,6 @@ public:
 	CONST_ACCESSOR2(TYPE_ENUM, int, int_val, AsEnum)
 	CONST_ACCESSOR(TYPE_STRING, BroString*, string_val, AsString)
 	CONST_ACCESSOR(TYPE_FUNC, Func*, func_val, AsFunc)
-	CONST_ACCESSOR(TYPE_FUNC, BroFunc*, bro_func_val, AsBroFunc)
 	CONST_ACCESSOR(TYPE_TABLE, PDict(TableEntryVal)*, table_val, AsTable)
 	CONST_ACCESSOR(TYPE_RECORD, val_list*, val_list_val, AsRecord)
 	CONST_ACCESSOR(TYPE_FILE, BroFile*, file_val, AsFile)
@@ -268,7 +266,6 @@ public:
 	// are protected to avoid external state changes.
 	// ACCESSOR(TYPE_STRING, BroString*, string_val, AsString)
 	ACCESSOR(TYPE_FUNC, Func*, func_val, AsFunc)
-	ACCESSOR(TYPE_FUNC, BroFunc*, bro_func_val, AsBroFunc)
 	ACCESSOR(TYPE_FILE, BroFile*, file_val, AsFile)
 	ACCESSOR(TYPE_PATTERN, RE_Matcher*, re_val, AsPattern)
 	ACCESSOR(TYPE_VECTOR, vector<Val*>*, vector_val, AsVector)

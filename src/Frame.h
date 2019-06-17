@@ -50,6 +50,8 @@ public:
 
 	// Deep-copies values.
 	Frame* Clone();
+	// Only deep-copies values corresponding to requested IDs.
+	Frame* SelectiveClone(id_list* selection);
 
 	// If the frame is run in the context of a trigger condition evaluation,
 	// the trigger needs to be registered.

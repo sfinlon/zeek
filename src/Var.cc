@@ -432,17 +432,11 @@ TraversalCode OuterIDBindingFinder::PreExpr(const Expr* expr)
 	return TC_CONTINUE;
 	}
 
-void end_func(Stmt* body)
+// Gets a function's priority from its Scope's attributes. Errors if it sees any
+// problems.
+int get_func_priotity(attr_list* attrs)
 	{
-	int frame_size = current_scope()->Length();
-	id_list* inits = current_scope()->GetInits();
-
-	Scope* scope = pop_scope();
-	ID* id = scope->ScopeID();
-
 	int priority = 0;
-	auto attrs = scope->Attrs();
-
 	if ( attrs )
 		{
 		loop_over_list(*attrs, i)
@@ -474,6 +468,20 @@ void end_func(Stmt* body)
 			priority = v->InternalInt();
 			}
 		}
+		return priority;
+	}
+
+void end_func(Stmt* body)
+	{
+	int frame_size = current_scope()->Length();
+	id_list* inits = current_scope()->GetInits();
+
+	Scope* scope = pop_scope();
+	ID* id = scope->ScopeID();
+
+	auto attrs = scope->Attrs();
+
+	int priority = get_func_priotity(attrs);
 
 	// if ( streq(id->Name(), "anonymous-function") )
 	// 	{
@@ -495,6 +503,29 @@ void end_func(Stmt* body)
 		}
 
 	id->ID_Val()->AsFunc()->SetScope(scope);
+	}
+
+// Gathers all of the information from the current scope needed to build a
+// function and collects it into a function_ingredients struct.
+std::unique_ptr<function_ingredients> gather_function_ingredients(Stmt* body)
+	{
+	std::unique_ptr<function_ingredients> ingredients (new function_ingredients);
+	int frame_size = current_scope()->Length();
+	id_list* inits = current_scope()->GetInits();
+
+	Scope* scope = pop_scope();
+	ID* id = scope->ScopeID();
+
+	auto attrs = scope->Attrs();
+
+	int priority = get_func_priotity(attrs);
+
+	ingredients->id = id;
+	ingredients->body = body;
+	ingredients->inits = inits;
+	ingredients->frame_size = frame_size;
+	ingredients->priority = priority;
+	return std::move(ingredients);
 	}
 
 Val* internal_val(const char* name)

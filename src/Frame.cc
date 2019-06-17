@@ -96,6 +96,26 @@ Frame* Frame::Clone()
 	return f;
 	}
 
+Frame* Frame::SelectiveClone(id_list* selection)
+	{
+	Frame* f = new Frame(size, function, func_args);
+	f->Clear();
+
+	loop_over_list(*selection, i)
+		{
+		ID* id = (*selection)[i];
+		f->frame[id->Offset()] =
+			frame[id->Offset()] ? frame[id->Offset()]->Clone() : 0;
+		}
+
+		if ( trigger )
+			Ref(trigger);
+		f->trigger = trigger;
+		f->call = call;
+
+		return f;
+	}
+
 void Frame::SetTrigger(Trigger* arg_trigger)
 	{
 	ClearTrigger();

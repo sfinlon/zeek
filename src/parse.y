@@ -1219,8 +1219,6 @@ func_body:
 
 anonymous_function:
 		TOK_FUNCTION func_params
-		/* TOK_FUNCTION begin_func func_body
-			{ $$ = new ConstExpr($2->ID_Val()); } */
 			{
 			$<id>$ = current_scope()->GenerateTemporary("anonymous-function");
 			begin_func($<id>$, current_module.c_str(), FUNC_FLAVOR_FUNCTION, 0, $2);
@@ -1240,11 +1238,10 @@ anonymous_function:
 
 		'}'
 			{
-			// Here we don't know the size of the functions closure because there
+			// Here, we don't know the size of the functions closure because there
 			// could be more variable assignments below the function. We capture the
-			// IDs of the functions arguments here and store them for later so that
-			// we can apply an appropriate offset to them once we know more about
-			// the closure.
+			// IDs of the functions arguments and store them for later so that we can
+			// apply an appropriate offset to them once we know more about the closure
 			std::shared_ptr<id_list> argument_ids(new id_list);
 			RecordType* args = $2->Args();
 			for ( int i = 0; i < args->NumFields(); ++i )
@@ -1254,9 +1251,13 @@ anonymous_function:
 				argument_ids->append(arg_id);
 				}
 
-			end_func($6);
+			// Every time a new LambdaExpr is evaluated it must return a new instance
+			// of a BroFunc. Here, we collect the ingredients for a function and give
+			// it to our LambdaExpr.
+			std::unique_ptr<function_ingredients> ingredients =
+				gather_function_ingredients($6);
 
-			$$ = new LambdaExpr(($<id>3)->ID_Val(), std::move(argument_ids));
+			$$ = new LambdaExpr(std::move(ingredients), std::move(argument_ids));
 			}
 	;
 

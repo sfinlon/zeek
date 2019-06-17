@@ -232,6 +232,15 @@ bool Func::DoUnserialize(UnserialInfo* info)
 	return true;
 	}
 
+Val* Func::DoClone()
+	{
+	// By default, ok just to return a reference. Func does not have any "state".
+	// That is different across instances.
+	Val* v = new Val(this);
+	Ref(v);
+	return v;
+	}
+
 void Func::DescribeDebug(ODesc* d, const val_list* args) const
 	{
 	d->Add(Name());
@@ -296,7 +305,7 @@ TraversalCode Func::Traverse(TraversalCallback* cb) const
 
 std::pair<bool, Val*> Func::HandlePluginResult(std::pair<bool, Val*> plugin_result, val_list* args, function_flavor flavor) const
 	{
-	// Helper function factoring out this code from BroFunc:Call() for
+	// Helper function factoring out this code from "BroFunc":Call() for
 	// better readability.
 
 	if( ! plugin_result.first )
@@ -370,7 +379,7 @@ BroFunc::~BroFunc()
 	for ( unsigned int i = 0; i < bodies.size(); ++i )
 		Unref(bodies[i].stmts);
 
-	delete this->closure;
+	Unref(this->closure);
 	}
 
 int BroFunc::IsPure() const
@@ -444,6 +453,7 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 	Val* result = 0;
 
 	// Add the closure's elements to the beginning of the frame.
+	// reporter->Warning("Adding closure elements.");
 	int ofst = 0;
 	while (ofst <  closure_size)
 		{
@@ -460,18 +470,6 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 		++ofst;
 		}
 
-	// Offset the argument_ids as appropriate
-	// TODO: where is the earliest place we know the closure size?
-	if (this->closure)
-		{
-		id_list* idl = argument_ids.get();
-		loop_over_list(*idl, i)
-			{
-			ID* id = (*idl)[i];
-			id->SetOffset(id->Offset() + closure_size);
-			}
-		}
-
 	for ( size_t i = 0; i < bodies.size(); ++i )
 		{
 		if ( sample_logger )
@@ -480,8 +478,8 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 
 		Unref(result);
 
-		// reporter->Warning("Adding function arguments.");
 		// Fill in the rest of the frame with the function's arguments.
+		// reporter->Warning("Filling function arguments.");
 		loop_over_list(*args, j)
 			{
 			Val* arg = (*args)[j];
@@ -535,26 +533,35 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 			}
 		}
 
-	// Reset the argument_ids' offsets as appropriate
-	if (this->closure)
+	// We'd like to allow the function to reach back into its closure frame and
+	// tinker with those values so that things like the following are possible:
+	// local make_counter = function(start : count) : function () : count
+	//		{return function () : count {start = start + 1; return start;};};
+
+	// Update the values in the closure if the function modified them.
+	// reporter->Warning("Updating closure elements");
+	ofst = 0;
+	while (ofst <  closure_size)
 		{
-		id_list* idl = argument_ids.get();
-		loop_over_list(*idl, i)
+		Val* element = f->NthElement(ofst);
+		if (element)
 			{
-			ID* id = (*idl)[i];
-			if (id)
+			// Don't override it if its already there.
+			if (f->NthElement(ofst) != closure->NthElement(ofst))
 				{
-				id->SetOffset(id->Offset() - closure_size);
+				Ref(element);
+				closure->SetElement(ofst, element);
 				}
 			}
+		++ofst;
 		}
 
 	call_stack.pop_back();
 
 	// We have an extra Ref for each argument (so that they don't get
 	// deleted between bodies), release that.
-	loop_over_list(*args, k)
-		Unref((*args)[k]);
+	// loop_over_list(*args, k)
+	// 	Unref((*args)[k]);
 
 	if ( Flavor() == FUNC_FLAVOR_HOOK )
 		{
@@ -608,6 +615,47 @@ void BroFunc::AddBody(Stmt* new_body, id_list* new_inits, int new_frame_size,
 
 	bodies.push_back(b);
 	sort(bodies.begin(), bodies.end());
+	}
+
+void BroFunc::UpdateOffsets()
+	{
+	if (this->closure)
+		{
+		int closure_size = this->closure->n_elements();
+		id_list* idl = argument_ids.get();
+		loop_over_list(*idl, i)
+			{
+			ID* id = (*idl)[i];
+			id->SetOffset(id->Offset() + closure_size);
+			}
+		}
+	}
+
+Val* BroFunc::DoClone()
+	{
+	// A BroFunc could hold a closure. In this case a clone of it must copy this
+	// store a copy of this closure.
+	if ( ! this->closure )
+		{
+		return Func::DoClone();
+		}
+	else
+		{
+		BroFunc* other = new BroFunc();
+
+		other->bodies = this->bodies;
+		other->scope = this->scope;
+		other->kind = this->kind;
+		other->type = this->type;
+		other->name = this->name;
+		other->unique_id = this->unique_id;
+		other->unique_ids = this->unique_ids;
+		other->frame_size = this->frame_size;
+		other->closure = this->closure->Clone();
+		other->argument_ids = this->argument_ids;
+
+		return new Val(other);
+		}
 	}
 
 void BroFunc::Describe(ODesc* d) const
