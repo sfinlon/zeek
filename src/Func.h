@@ -106,20 +106,13 @@ public:
 
 	// Makes a deep copy of the input frame and assigns it to this function's
 	// closure.
-	void SetClosure(Frame* f)
-		// Frames can be null:
-		// TODO: use OuterIDBindingFinder to only clone exactly what we need.
-		{ this->closure = f ? f->Clone() : f; }
+	void SetClosure(Frame* f);
 	void SetArgumentIDs(std::shared_ptr<id_list> args)
 		{
 		argument_ids = std::move(args);
-		// id_list* a = args.get();
-		// loop_over_list(*a, i)
-		// 	{
-		// 	Ref((*a)[i]);
-		// 	}
 		}
-	void UpdateOffsets();
+
+	void fsets();
 
 	Val* DoClone() override;
 
@@ -136,13 +129,14 @@ protected:
 	int frame_size;
 
 private:
+	// Shifts the offsets of each id in "idl" by "shift".
+	static void ShiftOffsets(int shift, std::shared_ptr<id_list> idl);
 	// IDs of the function arguments. Used to set offsets when the function has
 	// a closure. This pointer is shared with LambdaExpr.
-	std::shared_ptr<id_list> argument_ids;
+	std::shared_ptr<id_list> argument_ids = nullptr;
 	// The frame the Func was initialized in. This is not guaranteed to be
 	// initialized and should be handled with care.
 	Frame* closure = nullptr;
-	//
 };
 
 typedef Val* (*built_in_func)(Frame* frame, val_list* args);
@@ -189,6 +183,7 @@ struct function_ingredients
 		id_list* inits;
 		int frame_size;
 		int priority;
+		Scope* scope;
 	};
 
 extern vector<CallInfo> call_stack;

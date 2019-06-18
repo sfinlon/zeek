@@ -5001,24 +5001,20 @@ LambdaExpr::LambdaExpr(std::unique_ptr<function_ingredients> ingredients,
 
 Val* LambdaExpr::Eval(Frame* f) const
 	{
-	if (f)
-		reporter->Warning("eval being called in LambdaExpr");
-	// TODO: dangerous to just pass pointers into here? Look into cloning.
 	BroFunc* lamb = new BroFunc(
-															ingredients->id,
-															ingredients->body,
-															ingredients->inits,
-															ingredients->frame_size,
-															ingredients->priority
-														);
-	// TODO: Ref in here?
-	// This relies on an assumption that we can safely set offsets once for all
-	// of the argument IDs -> all the baby BroFuncs will have the same closure
-	// size. I'm not sure this actually the case.
+		ingredients->id,
+		ingredients->body,
+		ingredients->inits,
+		ingredients->frame_size,
+		ingredients->priority);
 	lamb->SetArgumentIDs(argument_ids);
 	lamb->SetClosure(f);
-	lamb->UpdateOffsets();
-	return (new Val(lamb))->Ref();
+
+	// ingredients->id->SetVal(new Val(lamb));
+	// ingredients->id->SetConst();
+	// ingredients->id->ID_Val()->AsFunc()->SetScope(ingredients->scope);
+
+	return new Val(lamb);
 	}
 
 void LambdaExpr::ExprDescribe(ODesc* d) const

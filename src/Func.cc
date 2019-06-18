@@ -426,7 +426,9 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 	if ( this->closure )
 		closure_size = this->closure->n_elements();
 
-	// f will hold the closure & functions values
+	BroFunc::ShiftOffsets(closure_size, this->argument_ids);
+
+	// f will hold the closure & function's values
 	Frame* f = new Frame(closure_size + frame_size, this, args);
 
 	// Hand down any trigger.
@@ -453,7 +455,6 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 	Val* result = 0;
 
 	// Add the closure's elements to the beginning of the frame.
-	// reporter->Warning("Adding closure elements.");
 	int ofst = 0;
 	while (ofst <  closure_size)
 		{
@@ -473,13 +474,11 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 	for ( size_t i = 0; i < bodies.size(); ++i )
 		{
 		if ( sample_logger )
-			sample_logger->LocationSeen(
-				bodies[i].stmts->GetLocationInfo());
+			sample_logger->LocationSeen(bodies[i].stmts->GetLocationInfo());
 
 		Unref(result);
 
 		// Fill in the rest of the frame with the function's arguments.
-		// reporter->Warning("Filling function arguments.");
 		loop_over_list(*args, j)
 			{
 			Val* arg = (*args)[j];
@@ -503,7 +502,11 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 			{
 			// Already reported, but now determine whether to unwind further.
 			if ( Flavor() == FUNC_FLAVOR_FUNCTION )
-				throw; // TODO: delete / unref f here?
+				{
+				Unref(f);
+				Unref(result);
+				throw;
+				}
 
 			// Continue exec'ing remaining bodies of hooks/events.
 			continue;
@@ -533,13 +536,7 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 			}
 		}
 
-	// We'd like to allow the function to reach back into its closure frame and
-	// tinker with those values so that things like the following are possible:
-	// local make_counter = function(start : count) : function () : count
-	//		{return function () : count {start = start + 1; return start;};};
-
 	// Update the values in the closure if the function modified them.
-	// reporter->Warning("Updating closure elements");
 	ofst = 0;
 	while (ofst <  closure_size)
 		{
@@ -556,12 +553,15 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 		++ofst;
 		}
 
+	// Move the offsets back now that we are done.
+	BroFunc::ShiftOffsets(-closure_size, this->argument_ids);
+
 	call_stack.pop_back();
 
 	// We have an extra Ref for each argument (so that they don't get
 	// deleted between bodies), release that.
-	// loop_over_list(*args, k)
-	// 	Unref((*args)[k]);
+	loop_over_list(*args, k)
+		Unref((*args)[k]);
 
 	if ( Flavor() == FUNC_FLAVOR_HOOK )
 		{
@@ -617,18 +617,32 @@ void BroFunc::AddBody(Stmt* new_body, id_list* new_inits, int new_frame_size,
 	sort(bodies.begin(), bodies.end());
 	}
 
-void BroFunc::UpdateOffsets()
+void BroFunc::SetClosure(Frame* f)
 	{
 	if (this->closure)
-		{
-		int closure_size = this->closure->n_elements();
-		id_list* idl = argument_ids.get();
-		loop_over_list(*idl, i)
+		reporter->InternalError
+			("Tried to override closure for BroFunc %s.", this->Name());
+
+	this->closure = f ? f->Clone() : nullptr;
+
+	// if (this->closure)
+	// 	BroFunc::ShiftOffsets(this->closure->n_elements() ,this->argument_ids);
+	}
+
+void BroFunc::ShiftOffsets(int shift, std::shared_ptr<id_list> idl)
+	{
+		id_list* tmp = idl.get();
+		if (! idl || shift == 0)
 			{
-			ID* id = (*idl)[i];
-			id->SetOffset(id->Offset() + closure_size);
+			// Nothing to do here.
+			return;
 			}
-		}
+
+		loop_over_list(*tmp, i)
+			{
+			ID* id = (*tmp)[i];
+			id->SetOffset(id->Offset() + shift);
+			}
 	}
 
 Val* BroFunc::DoClone()

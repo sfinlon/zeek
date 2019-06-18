@@ -473,36 +473,38 @@ int get_func_priotity(attr_list* attrs)
 
 void end_func(Stmt* body)
 	{
-	int frame_size = current_scope()->Length();
-	id_list* inits = current_scope()->GetInits();
+	std::unique_ptr<function_ingredients> ingredients =
+		gather_function_ingredients(body);
 
-	Scope* scope = pop_scope();
-	ID* id = scope->ScopeID();
-
-	auto attrs = scope->Attrs();
-
-	int priority = get_func_priotity(attrs);
-
-	// if ( streq(id->Name(), "anonymous-function") )
-	// 	{
-	// 	OuterIDBindingFinder cb(scope);
-	// 	body->Traverse(&cb);
-	//
-	// 	for ( size_t i = 0; i < cb.outer_id_references.size(); ++i )
-	// 		cb.outer_id_references[i]->Error(
-	// 					"referencing outer function IDs not supported");
-	// 	}
-
-	if ( id->HasVal() )
-		id->ID_Val()->AsFunc()->AddBody(body, inits, frame_size, priority);
-	else
+	if ( streq(ingredients->id->Name(), "anonymous-function") )
 		{
-		Func* f = new BroFunc(id, body, inits, frame_size, priority);
-		id->SetVal(new Val(f));
-		id->SetConst();
+		OuterIDBindingFinder cb(ingredients->scope);
+		ingredients->body->Traverse(&cb);
+
+		for ( size_t i = 0; i < cb.outer_id_references.size(); ++i )
+			cb.outer_id_references[i]->Error(
+						"referencing outer function IDs not supported");
 		}
 
-	id->ID_Val()->AsFunc()->SetScope(scope);
+	if ( ingredients->id->HasVal() )
+		ingredients->id->ID_Val()->AsFunc()->AddBody(
+			ingredients->body,
+			ingredients->inits,
+			ingredients->frame_size,
+			ingredients->priority);
+	else
+		{
+		Func* f = new BroFunc(
+			ingredients->id,
+			ingredients->body,
+			ingredients->inits,
+			ingredients->frame_size,
+			ingredients->priority);
+		ingredients->id->SetVal(new Val(f));
+		ingredients->id->SetConst();
+		}
+
+	ingredients->id->ID_Val()->AsFunc()->SetScope(ingredients->scope);
 	}
 
 // Gathers all of the information from the current scope needed to build a
@@ -525,6 +527,8 @@ std::unique_ptr<function_ingredients> gather_function_ingredients(Stmt* body)
 	ingredients->inits = inits;
 	ingredients->frame_size = frame_size;
 	ingredients->priority = priority;
+	ingredients->scope = scope;
+
 	return std::move(ingredients);
 	}
 
