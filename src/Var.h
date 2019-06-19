@@ -28,6 +28,7 @@ extern void begin_func(ID* id, const char* module_name, function_flavor flavor,
 extern void end_func(Stmt* body);
 extern std::unique_ptr<function_ingredients>
 	gather_function_ingredients(Stmt* body);
+extern std::shared_ptr<id_list> gather_outer_ids(Scope* scope, Stmt* body);
 
 extern Val* internal_val(const char* name);
 extern Val* internal_const_val(const char* name); // internal error if not const

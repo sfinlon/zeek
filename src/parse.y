@@ -1256,8 +1256,10 @@ anonymous_function:
 			// it to our LambdaExpr.
 			std::unique_ptr<function_ingredients> ingredients =
 				gather_function_ingredients($6);
+			std::shared_ptr<id_list> outer_ids = gather_outer_ids(pop_scope(), $6);
 
-			$$ = new LambdaExpr(std::move(ingredients), std::move(argument_ids));
+			$$ = new LambdaExpr(std::move(ingredients), std::move(argument_ids),
+														std::move(outer_ids));
 			}
 	;
 

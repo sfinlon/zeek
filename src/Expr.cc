@@ -282,7 +282,7 @@ Val* NameExpr::Eval(Frame* f) const
 		v = id->ID_Val();
 
 	else if ( f )
-		v = f->NthElement(id->Offset());
+		v = f->GetElement(id);
 
 	else
 		// No frame - evaluating for Simplify() purposes
@@ -316,7 +316,7 @@ void NameExpr::Assign(Frame* f, Val* v, Opcode op)
 	if ( id->IsGlobal() )
 		id->SetVal(v, op);
 	else
-		f->SetElement(id->Offset(), v);
+		f->SetElement(id, v);
 	}
 
 int NameExpr::IsPure() const
@@ -4992,10 +4992,12 @@ bool CallExpr::DoUnserialize(UnserialInfo* info)
 	}
 
 LambdaExpr::LambdaExpr(std::unique_ptr<function_ingredients> ingredients,
-												std::shared_ptr<id_list> arguments)
+												std::shared_ptr<id_list> arguments,
+												std::shared_ptr<id_list> outer_ids)
 	{
 	this->ingredients = std::move(ingredients);
 	this->argument_ids = std::move(arguments);
+	this->outer_ids = std::move(outer_ids);
 	SetType(this->ingredients->id->Type()->Ref());
 	}
 
@@ -5007,14 +5009,14 @@ Val* LambdaExpr::Eval(Frame* f) const
 		ingredients->inits,
 		ingredients->frame_size,
 		ingredients->priority);
-	lamb->SetArgumentIDs(argument_ids);
-	lamb->SetClosure(f);
 
-	// ingredients->id->SetVal(new Val(lamb));
-	// ingredients->id->SetConst();
-	// ingredients->id->ID_Val()->AsFunc()->SetScope(ingredients->scope);
+	lamb->AddClosure(argument_ids, outer_ids, f);
 
-	return new Val(lamb);
+	ingredients->id->SetVal((new Val(lamb))->Ref());
+	ingredients->id->SetConst();
+	ingredients->id->ID_Val()->AsFunc()->SetScope(ingredients->scope);
+
+	return ingredients->id->ID_Val();
 	}
 
 void LambdaExpr::ExprDescribe(ODesc* d) const

@@ -422,14 +422,13 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 		return Flavor() == FUNC_FLAVOR_HOOK ? val_mgr->GetTrue() : 0;
 		}
 
-	int closure_size = 0;
-	if ( this->closure )
-		closure_size = this->closure->n_elements();
-
-	BroFunc::ShiftOffsets(closure_size, this->argument_ids);
-
 	// f will hold the closure & function's values
-	Frame* f = new Frame(closure_size + frame_size, this, args);
+	Frame* f = new Frame(frame_size, this, args);
+	if (this->closure)
+		{
+		assert(outer_ids);
+		f = new ClosureFrame(this->closure, f, this->outer_ids);
+		}
 
 	// Hand down any trigger.
 	if ( parent )
@@ -454,23 +453,6 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 	stmt_flow_type flow = FLOW_NEXT;
 	Val* result = 0;
 
-	// Add the closure's elements to the beginning of the frame.
-	int ofst = 0;
-	while (ofst <  closure_size)
-		{
-		Val* element = closure->NthElement(ofst);
-		if (element)
-			{
-			// Don't override it if its already there.
-			if (f->NthElement(ofst) != element)
-				{
-				Ref(element);
-				f->SetElement(ofst, element);
-				}
-			}
-		++ofst;
-		}
-
 	for ( size_t i = 0; i < bodies.size(); ++i )
 		{
 		if ( sample_logger )
@@ -483,15 +465,15 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 			{
 			Val* arg = (*args)[j];
 
-			if ( f->NthElement(ofst + j) != arg )
+			if ( f->NthElement(j) != arg )
 				{
 				// Either not yet set, or somebody reassigned the frame slot.
 				Ref(arg);
-				f->SetElement(ofst + j, arg);
+				f->SetElement(j, arg);
 				}
 			}
 
-		f->Reset(args->length() + closure_size);
+		f->Reset(args->length());
 
 		try
 			{
@@ -514,6 +496,7 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 
 		if ( f->HasDelayed() )
 			{
+			if (! result) reporter->Warning("rest in peacs");
 			assert(! result);
 			assert(parent);
 			parent->SetDelayed();
@@ -535,26 +518,6 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 				}
 			}
 		}
-
-	// Update the values in the closure if the function modified them.
-	ofst = 0;
-	while (ofst <  closure_size)
-		{
-		Val* element = f->NthElement(ofst);
-		if (element)
-			{
-			// Don't override it if its already there.
-			if (f->NthElement(ofst) != closure->NthElement(ofst))
-				{
-				Ref(element);
-				closure->SetElement(ofst, element);
-				}
-			}
-		++ofst;
-		}
-
-	// Move the offsets back now that we are done.
-	BroFunc::ShiftOffsets(-closure_size, this->argument_ids);
 
 	call_stack.pop_back();
 
@@ -587,6 +550,7 @@ Val* BroFunc::Call(val_list* args, Frame* parent) const
 		}
 
 	g_frame_stack.pop_back();
+
 	Unref(f);
 
 	return result;
@@ -617,16 +581,22 @@ void BroFunc::AddBody(Stmt* new_body, id_list* new_inits, int new_frame_size,
 	sort(bodies.begin(), bodies.end());
 	}
 
-void BroFunc::SetClosure(Frame* f)
+void BroFunc::AddClosure(std::shared_ptr<id_list> args,
+	std::shared_ptr<id_list> ids, Frame* f)
+	{
+	// Order matters here.
+	this->SetArgumentIDs(args);
+	this->SetOuterIDs(ids);
+	this->SetClosureFrame(f);
+	}
+
+void BroFunc::SetClosureFrame(Frame* f)
 	{
 	if (this->closure)
 		reporter->InternalError
 			("Tried to override closure for BroFunc %s.", this->Name());
 
 	this->closure = f ? f->Clone() : nullptr;
-
-	// if (this->closure)
-	// 	BroFunc::ShiftOffsets(this->closure->n_elements() ,this->argument_ids);
 	}
 
 void BroFunc::ShiftOffsets(int shift, std::shared_ptr<id_list> idl)
@@ -667,6 +637,7 @@ Val* BroFunc::DoClone()
 		other->frame_size = this->frame_size;
 		other->closure = this->closure->Clone();
 		other->argument_ids = this->argument_ids;
+		other->outer_ids = this->outer_ids;
 
 		return new Val(other);
 		}

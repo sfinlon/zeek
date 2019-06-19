@@ -104,13 +104,8 @@ public:
 	void AddBody(Stmt* new_body, id_list* new_inits, int new_frame_size,
 			int priority) override;
 
-	// Makes a deep copy of the input frame and assigns it to this function's
-	// closure.
-	void SetClosure(Frame* f);
-	void SetArgumentIDs(std::shared_ptr<id_list> args)
-		{
-		argument_ids = std::move(args);
-		}
+	void AddClosure(std::shared_ptr<id_list> args, std::shared_ptr<id_list> ids,
+		Frame* f);
 
 	void fsets();
 
@@ -131,9 +126,20 @@ protected:
 private:
 	// Shifts the offsets of each id in "idl" by "shift".
 	static void ShiftOffsets(int shift, std::shared_ptr<id_list> idl);
+
+	// Makes a deep copy of the input frame and captures it.
+	void SetClosureFrame(Frame* f);
+
+	void SetArgumentIDs(std::shared_ptr<id_list> args)
+		{ argument_ids = std::move(args); }
+
+	void SetOuterIDs(std::shared_ptr<id_list> ids)
+		{ outer_ids = std::move(ids); }
+
 	// IDs of the function arguments. Used to set offsets when the function has
 	// a closure. This pointer is shared with LambdaExpr.
 	std::shared_ptr<id_list> argument_ids = nullptr;
+	std::shared_ptr<id_list> outer_ids = nullptr;
 	// The frame the Func was initialized in. This is not guaranteed to be
 	// initialized and should be handled with care.
 	Frame* closure = nullptr;

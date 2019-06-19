@@ -475,6 +475,7 @@ void end_func(Stmt* body)
 	{
 	std::unique_ptr<function_ingredients> ingredients =
 		gather_function_ingredients(body);
+	pop_scope();
 
 	if ( streq(ingredients->id->Name(), "anonymous-function") )
 		{
@@ -512,22 +513,16 @@ void end_func(Stmt* body)
 std::unique_ptr<function_ingredients> gather_function_ingredients(Stmt* body)
 	{
 	std::unique_ptr<function_ingredients> ingredients (new function_ingredients);
-	int frame_size = current_scope()->Length();
-	id_list* inits = current_scope()->GetInits();
+	ingredients->frame_size = current_scope()->Length();
+	ingredients->inits = current_scope()->GetInits();
 
-	Scope* scope = pop_scope();
-	ID* id = scope->ScopeID();
+	ingredients->scope = current_scope();
+	ingredients->id = ingredients->scope->ScopeID();
 
-	auto attrs = scope->Attrs();
+	auto attrs = ingredients->scope->Attrs();
 
-	int priority = get_func_priotity(attrs);
-
-	ingredients->id = id;
+	ingredients->priority = get_func_priotity(attrs);
 	ingredients->body = body;
-	ingredients->inits = inits;
-	ingredients->frame_size = frame_size;
-	ingredients->priority = priority;
-	ingredients->scope = scope;
 
 	return std::move(ingredients);
 	}
@@ -542,6 +537,19 @@ Val* internal_val(const char* name)
 	Val* rval = id->ID_Val();
 	Unref(id);
 	return rval;
+	}
+
+std::shared_ptr<id_list> gather_outer_ids(Scope* scope, Stmt* body)
+	{
+	OuterIDBindingFinder cb(scope);
+	body->Traverse(&cb);
+
+	std::shared_ptr<id_list> idl (new id_list);
+
+	for ( size_t i = 0; i < cb.outer_id_references.size(); ++i )
+		idl->append(cb.outer_id_references[i]->Id());
+
+	return std::move(idl);
 	}
 
 Val* internal_const_val(const char* name)

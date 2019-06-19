@@ -1015,16 +1015,19 @@ protected:
 
 /*
 	Class to handle the creation of anonymous functions with closures.
-	- Takes all of the ingredients needed to make a BroFunc and the argument IDs
-		that the BroFunc with those ingredients needs.
-	- When evaluated, creates a new BroFunc with those ingredients and gives that
-		BroFunc a copy of the frame that it is being evalued in. This frame serves
-		as the closure for the new BroFunc.
+
+	Facts:
+		- LambdaExpr creates a new BroFunc on every call to Eval.
+		- LambdaExpr must be given all the information to create a BroFunc on
+			construction except for the closure.
+		- The closure for created BroFuncs is the frame that the LambdaExpr is
+			evaluated in.
 */
 class LambdaExpr : public Expr {
 public:
 	LambdaExpr(std::unique_ptr<function_ingredients> ingredients,
-							std::shared_ptr<id_list> arguments);
+							std::shared_ptr<id_list> arguments,
+							std::shared_ptr<id_list> outer_ids);
 
 	Val* Eval(Frame* f) const override;
 	TraversalCode Traverse(TraversalCallback* cb) const override;
@@ -1034,7 +1037,7 @@ protected:
 
 private:
 	std::unique_ptr<function_ingredients> ingredients;
-	std::shared_ptr<id_list> argument_ids;
+	std::shared_ptr<id_list> argument_ids, outer_ids;
 };
 
 class EventExpr : public Expr {
